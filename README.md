@@ -1,73 +1,85 @@
-# React + TypeScript + Vite
+# Spectra Digitizer
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Digitize plotted spectra or curves from an image: select regions of interest (ROIs), auto-detect axes and ticks, calibrate pixel coordinates to real data, trace the curve with seed points, and export the sampled points as CSV.
 
-Currently, two official plugins are available:
+## Quick start
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+1. Install dependencies: `npm install`
+2. Run the dev server: `npm run dev`
+3. Open the app, then follow the workflow below.
 
-## React Compiler
+## Workflow at a glance
 
-The React Compiler is currently not compatible with SWC. See [this issue](https://github.com/vitejs/vite-plugin-react/issues/428) for tracking the progress.
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+Upload image
+  ↓
+Draw Plot ROI
+  ↓
+Draw X axis ROI  →  Draw Y axis ROI
+          ↓
+     Auto Detect axes & ticks
+          ↓
+Enter calibration numbers & click ticks (X1 → X2 → Y1 → Y2)
+          ↓
+       Build Calibration
+          ↓
+Pick Seeds S1–S3 → adjust Threshold / Mode / MaxJump → Retrace
+          ↓
+   Preview chart & Download CSV
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Detailed steps & controls
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+1. **Upload an image**
+   - Supported types: PNG or JPEG.
+   - Uploading resets the session state (clears ROIs, calibration, and curve points).
+   - File name is reused as the CSV base name when exporting.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+2. **Plot ROI**
+   - Drag a rectangle on the *Original Image* canvas to isolate the plot area.
+   - Committing a new ROI clears prior axis picks, calibration, and curve seeds.
+
+3. **Axis ROIs**
+   - Switch to **Select X Axis ROI** or **Select Y Axis ROI**, then drag rectangles on the *ROI Image* canvas around each axis line plus ticks.
+   - Both X and Y axis ROIs must be set before auto detection.
+
+4. **Auto Detect axes and ticks**
+   - Click **Auto Detect** to locate axis lines and tick candidates inside the ROIs.
+   - If successful, the app switches to calibration mode and resets prior tick picks and curve seeds.
+
+5. **Calibration picks & numeric inputs**
+   - Numeric fields: **x1, x2, y1, y2** — enter the real-world values that correspond to the picked ticks.
+   - **Reverse X** checkbox: keep pixel order but flip X when mapping to data values.
+   - In the *ROI Image* canvas (calibration mode), click ticks in order: **X1 → X2 → Y1 → Y2**. The app snaps to the nearest detected tick within a small radius.
+   - Clear picks anytime with **Clear Calib Picks**.
+
+6. **Build Calibration**
+   - Enabled only when all four tick picks and all four numeric values are present.
+   - Computes a pixel-to-data mapper and a blacklist that masks axes/ticks so curve tracing ignores them.
+   - After building, the app is marked **calibrated** and seeds/points reset.
+
+7. **Curve extraction**
+   - Click **Pick Seeds** to enter curve mode, then click exactly three seed points (S1–S3) along the target curve.
+   - The app measures the averaged color of the seeds, traces connected pixels with that color profile, and converts pixel coordinates to sorted data points (X sorting respects **Reverse X**).
+   - Controls (enabled after 3 seeds and color pick):
+     - **Threshold** (1–200): sensitivity to color similarity; lower is stricter.
+     - **Mode**: `centerline` (follow thin center) or `median` (median across thickness).
+     - **MaxJump**: maximum allowed pixel gap between traced steps to continue the curve.
+   - Use **Retrace** after adjusting controls to recompute points with the latest settings.
+   - **Clear Seeds** removes seed points and traced data.
+
+8. **Preview & export**
+   - The *Data Preview Chart* renders traced data points immediately.
+   - **Download CSV** exports the current points as `<image-name>.csv` (or `spectra_digitized.csv` if unnamed).
+
+## Keyboard/mouse basics
+
+- Drawing ROIs and picking points are mouse-driven.
+- No keyboard shortcuts are required; all actions are button- or click-based.
+
+## Troubleshooting tips
+
+- **Auto Detect failed**: verify both axis ROIs tightly enclose the axes and ticks; retry after adjusting ROI sizes.
+- **Cannot Build Calibration**: ensure all four numeric values and all four tick picks are set.
+- **Tracing stops early**: try increasing **Threshold** or **MaxJump**; if it wanders off-curve, decrease them.
+- **Reversed X data**: toggle **Reverse X** and retrace or rebuild to flip ordering during mapping.
