@@ -59,6 +59,28 @@ function cluster1D(values: number[], gap = 3): number[] {
   return out;
 }
 
+function smooth1D(values: number[], window = 2): number[] {
+  const out = new Array(values.length).fill(0);
+  for (let i = 0; i < values.length; i++) {
+    let sum = 0;
+    let count = 0;
+    for (let k = -window; k <= window; k++) {
+      const idx = i + k;
+      if (idx < 0 || idx >= values.length) continue;
+      sum += values[idx];
+      count++;
+    }
+    out[i] = count > 0 ? sum / count : values[i];
+  }
+  return out;
+}
+
+function bestIndexFromScores(scores: number[]): number {
+  let best = 0;
+  for (let i = 1; i < scores.length; i++) if (scores[i] > scores[best]) best = i;
+  return best;
+}
+
 export function detectAxesAndTicksTwoRois(args: {
   roi: ImageData;
   axisRoiX: Rect;
@@ -71,34 +93,64 @@ export function detectAxesAndTicksTwoRois(args: {
 
   // --- Detect x-axis y position via row projection in axisRoiX
   const thrX = computeThreshold(roi, axisRoiX);
-  const xRowSum = new Array(Math.floor(axisRoiX.h)).fill(0);
+  const xRowScores = new Array(Math.floor(axisRoiX.h)).fill(0);
   for (let yy = 0; yy < Math.floor(axisRoiX.h); yy++) {
     const y = clamp(Math.floor(axisRoiX.y) + yy, 0, h - 1);
-    let sum = 0;
+    let score = 0;
     for (let x = clamp(Math.floor(axisRoiX.x), 0, w - 1); x < clamp(Math.floor(axisRoiX.x + axisRoiX.w), 0, w); x++) {
       const idx = (y * w + x) * 4;
-      if (grayAt(data, idx) < thrX) sum++;
+      const g = grayAt(data, idx);
+      if (g < thrX) score += thrX - g;
     }
-    xRowSum[yy] = sum;
+    xRowScores[yy] = score;
   }
-  let bestRow = 0;
-  for (let i = 1; i < xRowSum.length; i++) if (xRowSum[i] > xRowSum[bestRow]) bestRow = i;
+  let bestRow = bestIndexFromScores(smooth1D(xRowScores));
+  if (xRowScores[bestRow] === 0) {
+    const fallback = new Array(Math.floor(axisRoiX.h)).fill(0);
+    for (let yy = 0; yy < Math.floor(axisRoiX.h); yy++) {
+      const y = clamp(Math.floor(axisRoiX.y) + yy, 0, h - 1);
+      let sum = 0;
+      let count = 0;
+      for (let x = clamp(Math.floor(axisRoiX.x), 0, w - 1); x < clamp(Math.floor(axisRoiX.x + axisRoiX.w), 0, w); x++) {
+        const idx = (y * w + x) * 4;
+        sum += grayAt(data, idx);
+        count++;
+      }
+      fallback[yy] = count > 0 ? 255 - sum / count : 0;
+    }
+    bestRow = bestIndexFromScores(smooth1D(fallback));
+  }
   const xAxisY = clamp(Math.floor(axisRoiX.y) + bestRow, 0, h - 1);
 
   // --- Detect y-axis x position via col projection in axisRoiY
   const thrY = computeThreshold(roi, axisRoiY);
-  const yColSum = new Array(Math.floor(axisRoiY.w)).fill(0);
+  const yColScores = new Array(Math.floor(axisRoiY.w)).fill(0);
   for (let xx = 0; xx < Math.floor(axisRoiY.w); xx++) {
     const x = clamp(Math.floor(axisRoiY.x) + xx, 0, w - 1);
-    let sum = 0;
+    let score = 0;
     for (let y = clamp(Math.floor(axisRoiY.y), 0, h - 1); y < clamp(Math.floor(axisRoiY.y + axisRoiY.h), 0, h); y++) {
       const idx = (y * w + x) * 4;
-      if (grayAt(data, idx) < thrY) sum++;
+      const g = grayAt(data, idx);
+      if (g < thrY) score += thrY - g;
     }
-    yColSum[xx] = sum;
+    yColScores[xx] = score;
   }
-  let bestCol = 0;
-  for (let i = 1; i < yColSum.length; i++) if (yColSum[i] > yColSum[bestCol]) bestCol = i;
+  let bestCol = bestIndexFromScores(smooth1D(yColScores));
+  if (yColScores[bestCol] === 0) {
+    const fallback = new Array(Math.floor(axisRoiY.w)).fill(0);
+    for (let xx = 0; xx < Math.floor(axisRoiY.w); xx++) {
+      const x = clamp(Math.floor(axisRoiY.x) + xx, 0, w - 1);
+      let sum = 0;
+      let count = 0;
+      for (let y = clamp(Math.floor(axisRoiY.y), 0, h - 1); y < clamp(Math.floor(axisRoiY.y + axisRoiY.h), 0, h); y++) {
+        const idx = (y * w + x) * 4;
+        sum += grayAt(data, idx);
+        count++;
+      }
+      fallback[xx] = count > 0 ? 255 - sum / count : 0;
+    }
+    bestCol = bestIndexFromScores(smooth1D(fallback));
+  }
   const yAxisX = clamp(Math.floor(axisRoiY.x) + bestCol, 0, w - 1);
 
   const xAxisLine = makeLineHorizontal(xAxisY);

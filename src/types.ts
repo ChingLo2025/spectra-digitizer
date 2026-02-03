@@ -25,7 +25,8 @@ export type CalibrationState = {
 };
 
 export type CurveState = {
-  seeds: Point[]; // len <= 3
+  seeds: Point[];
+  seedTarget: number;
   pickedColor?: { r: number; g: number; b: number };
   threshold: number;
   mode: "centerline" | "median";
@@ -56,5 +57,5 @@ export type AppState = {
 export const initialState: AppState = {
   image: { width: 0, height: 0 },
   calibration: { reverseX: false },
-  curve: { seeds: [], threshold: 45, mode: "centerline", maxJump: 20 },
+  curve: { seeds: [], seedTarget: 3, threshold: 45, mode: "centerline", maxJump: 20 },
 };

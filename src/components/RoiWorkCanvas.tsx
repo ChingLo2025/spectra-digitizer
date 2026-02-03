@@ -18,6 +18,7 @@ type Props = {
   calibPoints: CalibrationState;
   onClickRoiPoint: (p: Point) => void;
   seedPoints: Point[];
+  seedTarget: number;
 };
 
 type Viewport = { scale: number; ox: number; oy: number; dw: number; dh: number };
@@ -54,6 +55,7 @@ export default function RoiWorkCanvas(props: Props) {
     calibPoints,
     onClickRoiPoint,
     seedPoints,
+    seedTarget,
   } = props;
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -213,11 +215,11 @@ export default function RoiWorkCanvas(props: Props) {
       ctx.fillStyle = "rgba(233,238,246,0.75)";
       ctx.font = "12px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
       if (interactionMode === "axis") {
-        ctx.fillText(`Drag to set ${axisMode.toUpperCase()} Axis ROI`, 12, 18);
+        ctx.fillText(`Click to start & finish ${axisMode.toUpperCase()} Axis ROI`, 12, 18);
       } else if (interactionMode === "calibration") {
         ctx.fillText(`Click tick candidates in order: ${calibStage}`, 12, 18);
       } else {
-        ctx.fillText(`Click curve 3 times to pick seeds`, 12, 18);
+        ctx.fillText(`Click curve to pick seeds (${seedPoints.length}/${seedTarget})`, 12, 18);
       }
 
       ctx.restore();
@@ -232,7 +234,7 @@ export default function RoiWorkCanvas(props: Props) {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [roi, axisRoiX, axisRoiY, axisMode, autoDetect, interactionMode, calibStage, calibPoints, seedPoints, drag]);
+  }, [roi, axisRoiX, axisRoiY, axisMode, autoDetect, interactionMode, calibStage, calibPoints, seedPoints, seedTarget, drag]);
 
   function canvasToRoi(e: ReactMouseEvent<HTMLCanvasElement>, cw: number, ch: number) {
     if (!roi) return null;
@@ -261,7 +263,28 @@ export default function RoiWorkCanvas(props: Props) {
     if (!t) return;
 
     if (t.rx < 0 || t.ry < 0 || t.rx > roi.width || t.ry > roi.height) return;
-    setDrag({ dragging: true, x0: t.cx, y0: t.cy, x1: t.cx, y1: t.cy });
+
+    if (!drag.dragging) {
+      setDrag({ dragging: true, x0: t.cx, y0: t.cy, x1: t.cx, y1: t.cy });
+      return;
+    }
+
+    const vp = getViewport(cw, ch, roi.width, roi.height);
+
+    const x0 = Math.min(drag.x0, t.cx);
+    const y0 = Math.min(drag.y0, t.cy);
+    const x1 = Math.max(drag.x0, t.cx);
+    const y1 = Math.max(drag.y0, t.cy);
+
+    const rx0 = clamp((x0 - vp.ox) / vp.scale, 0, roi.width);
+    const ry0 = clamp((y0 - vp.oy) / vp.scale, 0, roi.height);
+    const rx1 = clamp((x1 - vp.ox) / vp.scale, 0, roi.width);
+    const ry1 = clamp((y1 - vp.oy) / vp.scale, 0, roi.height);
+
+    const rectRoi = { x: rx0, y: ry0, w: rx1 - rx0, h: ry1 - ry0 };
+    if (rectRoi.w >= 2 && rectRoi.h >= 2) onCommitAxisRoi(axisMode, rectRoi);
+
+    setDrag((d) => ({ ...d, dragging: false, x1: t.cx, y1: t.cy }));
   }
 
   function onMove(e: ReactMouseEvent<HTMLCanvasElement>) {
@@ -282,26 +305,6 @@ export default function RoiWorkCanvas(props: Props) {
 
     const cw = parent.clientWidth;
     const ch = parent.clientHeight;
-
-    if (interactionMode === "axis" && drag.dragging) {
-      const vp = getViewport(cw, ch, roi.width, roi.height);
-
-      const x0 = Math.min(drag.x0, drag.x1);
-      const y0 = Math.min(drag.y0, drag.y1);
-      const x1 = Math.max(drag.x0, drag.x1);
-      const y1 = Math.max(drag.y0, drag.y1);
-
-      const rx0 = clamp((x0 - vp.ox) / vp.scale, 0, roi.width);
-      const ry0 = clamp((y0 - vp.oy) / vp.scale, 0, roi.height);
-      const rx1 = clamp((x1 - vp.ox) / vp.scale, 0, roi.width);
-      const ry1 = clamp((y1 - vp.oy) / vp.scale, 0, roi.height);
-
-      const rectRoi = { x: rx0, y: ry0, w: rx1 - rx0, h: ry1 - ry0 };
-      if (rectRoi.w >= 2 && rectRoi.h >= 2) onCommitAxisRoi(axisMode, rectRoi);
-
-      setDrag((d) => ({ ...d, dragging: false }));
-      return;
-    }
 
     // Click mode: calibration / curve
     const t = canvasToRoi(e, cw, ch);

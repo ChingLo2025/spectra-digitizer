@@ -1,10 +1,12 @@
 import type { Point } from "../types";
 
 export function computeAverageColor(roi: ImageData, seeds: Point[]): { r: number; g: number; b: number } {
-  if (seeds.length !== 3) throw new Error("Need exactly 3 seeds to compute average color");
+  if (seeds.length < 1) throw new Error("Need at least 1 seed to compute average color");
   const { data, width, height } = roi;
 
-  let sr = 0, sg = 0, sb = 0;
+  let sr = 0;
+  let sg = 0;
+  let sb = 0;
   for (const s of seeds) {
     const x = Math.max(0, Math.min(width - 1, Math.round(s.x)));
     const y = Math.max(0, Math.min(height - 1, Math.round(s.y)));
@@ -13,7 +15,7 @@ export function computeAverageColor(roi: ImageData, seeds: Point[]): { r: number
     sg += data[idx + 1];
     sb += data[idx + 2];
   }
-  return { r: Math.round(sr / 3), g: Math.round(sg / 3), b: Math.round(sb / 3) };
+  return { r: Math.round(sr / seeds.length), g: Math.round(sg / seeds.length), b: Math.round(sb / seeds.length) };
 }
 
 function distRgb2(a: { r: number; g: number; b: number }, r: number, g: number, b: number) {
@@ -115,7 +117,7 @@ function traceDirection(args: {
 
 export function traceCurveWithSeeds(args: {
   roi: ImageData;
-  seeds: Point[]; // len 3
+  seeds: Point[];
   pickedColor: { r: number; g: number; b: number };
   threshold: number;
   mode: "centerline" | "median";
@@ -123,9 +125,9 @@ export function traceCurveWithSeeds(args: {
   isBlacklistedPixel: (p: Point) => boolean;
 }): Point[] {
   const { roi, seeds } = args;
-  if (seeds.length !== 3) throw new Error("Need exactly 3 seeds");
+  if (seeds.length < 3) throw new Error("Need at least 3 seeds");
   const seedsSorted = [...seeds].sort((a, b) => a.x - b.x);
-  const mid = seedsSorted[1];
+  const mid = seedsSorted[Math.floor(seedsSorted.length / 2)];
 
   const xStart = Math.max(0, Math.min(roi.width - 1, Math.round(mid.x)));
   const yStart = Math.max(0, Math.min(roi.height - 1, Math.round(mid.y)));
