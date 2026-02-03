@@ -14,6 +14,7 @@ import { toCsv, downloadText } from "./lib/export";
 type AxisMode = "x" | "y";
 type InteractionMode = "axis" | "calibration" | "curve";
 type CalibStage = "X1" | "X2" | "Y1" | "Y2" | "done";
+type StepId = 1 | 2 | 3 | 4 | 5;
 
 function dist2(a: Point, b: Point) {
   const dx = a.x - b.x;
@@ -38,6 +39,7 @@ function nearestWithin(p: Point, pts: Point[], radius: number): Point | null {
 
 export default function App() {
   const [state, setState] = useState<AppState>(initialState);
+  const [step, setStep] = useState<StepId>(1);
 
   const [error, setError] = useState<string | null>(null);
 
@@ -61,7 +63,14 @@ export default function App() {
 
   const calibrationReady = !!state.calibration.pixelToData;
   const canPickSeeds = calibrationReady && !!state.roiImageData && !!state.autoDetect;
-  const seedsReady = state.curve.seeds.length === 3;
+  const seedsReady = state.curve.seeds.length === state.curve.seedTarget;
+  const stepLabels = [
+    "上傳檔案",
+    "拉 ROI",
+    "拉 Axis-ROI",
+    "Autodetect 與座標軸校正",
+    "Pick seeds 與 Curve Extraction",
+  ];
 
   async function onUpload(file?: File) {
     setError(null);
@@ -74,6 +83,7 @@ export default function App() {
       setAxisMode("x");
       setInteractionMode("axis");
       setCalibStage("X1");
+      setStep(2);
 
       setState({
         image: { file, bitmap, width: bitmap.width, height: bitmap.height },
@@ -83,7 +93,7 @@ export default function App() {
         axisRoiY: undefined,
         autoDetect: undefined,
         calibration: { reverseX: false },
-        curve: { seeds: [], threshold: 45, mode: "centerline", maxJump: 20 },
+        curve: { seeds: [], seedTarget: 3, threshold: 45, mode: "centerline", maxJump: 20 },
       });
     } catch (e: any) {
       setError(e?.message ?? "Failed to load image.");
@@ -100,6 +110,7 @@ export default function App() {
       setAxisMode("x");
       setInteractionMode("axis");
       setCalibStage("X1");
+      setStep(3);
 
       setState((prev) => ({
         ...prev,
@@ -138,6 +149,7 @@ export default function App() {
 
       setCalibStage("X1");
       setInteractionMode("calibration");
+      setStep(4);
 
       setState((prev) => ({
         ...prev,
@@ -246,11 +258,11 @@ export default function App() {
 
       setState((prev) => {
         const curv = prev.curve;
-        if (curv.seeds.length >= 3) return prev;
+        if (curv.seeds.length >= curv.seedTarget) return prev;
 
         const seeds = [...curv.seeds, p];
 
-        if (seeds.length === 3) {
+        if (seeds.length === curv.seedTarget) {
           const pickedColor = computeAverageColor(prev.roiImageData!, seeds);
 
           const pxPts = traceCurveWithSeeds({
@@ -320,6 +332,7 @@ export default function App() {
   function startPickSeeds() {
     if (!canPickSeeds) return;
     setInteractionMode("curve");
+    setStep(5);
     setState((prev) => ({
       ...prev,
       curve: { ...prev.curve, seeds: [], pickedColor: undefined, points: undefined },
@@ -339,7 +352,7 @@ export default function App() {
     if (!state.calibration.isBlacklistedPixel) return;
 
     const curv = { ...state.curve, ...(next ?? {}) };
-    if (curv.seeds.length !== 3 || !curv.pickedColor) return;
+    if (curv.seeds.length !== curv.seedTarget || !curv.pickedColor) return;
 
     try {
       const pxPts = traceCurveWithSeeds({
@@ -378,6 +391,40 @@ export default function App() {
     retraceNow({ maxJump: v });
   }
 
+  function setSeedTarget(v: number) {
+    const normalized = Number.isFinite(v) ? Math.round(v) : 3;
+    const next = Math.min(1000, Math.max(3, normalized));
+    setState((prev) => ({
+      ...prev,
+      curve: { ...prev.curve, seedTarget: next, seeds: [], pickedColor: undefined, points: undefined },
+    }));
+  }
+
+  function goToStep(next: StepId) {
+    if (next === 1) {
+      setStep(1);
+      return;
+    }
+    if (next === 2 && state.image.bitmap) {
+      setStep(2);
+      return;
+    }
+    if (next === 3 && state.roiImageData) {
+      setStep(3);
+      setInteractionMode("axis");
+      return;
+    }
+    if (next === 4 && state.axisRoiX && state.axisRoiY) {
+      setStep(4);
+      setInteractionMode("calibration");
+      return;
+    }
+    if (next === 5 && canPickSeeds) {
+      setStep(5);
+      setInteractionMode("curve");
+    }
+  }
+
   return (
     <div className="app">
       <header className="topbar">
@@ -389,10 +436,46 @@ export default function App() {
 
       {error && <div className="error">{error}</div>}
 
-      <div className="main">
+      <div className="stepper">
+        {stepLabels.map((label, idx) => {
+          const stepId = (idx + 1) as StepId;
+          const isActive = stepId === step;
+          const canJump =
+            stepId === 1 ||
+            (stepId === 2 && !!state.image.bitmap) ||
+            (stepId === 3 && !!state.roiImageData) ||
+            (stepId === 4 && !!state.axisRoiX && !!state.axisRoiY) ||
+            (stepId === 5 && canPickSeeds);
+          const isClickable = stepId <= step || canJump;
+          return (
+            <button
+              key={label}
+              className={`stepBtn ${isActive ? "active" : ""}`}
+              disabled={!isClickable}
+              onClick={() => goToStep(stepId)}
+            >
+              <span className="stepIndex">{stepId}</span>
+              <span>{label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {step === 1 && (
         <section className="panel">
-          <div className="panelTitle">Original Image <span className="sub">(drag Plot ROI here)</span></div>
+          <div className="panelTitle">Step 1 · 上傳檔案</div>
           <div className="panelBody">
+            <div className="muted" style={{ padding: "8px 0" }}>
+              先在上方選擇圖片檔案，完成後會自動進入 Step 2。
+            </div>
+          </div>
+        </section>
+      )}
+
+      {step === 2 && (
+        <section className="panel">
+          <div className="panelTitle">Step 2 · 拉 ROI <span className="sub">(點一下開始、再點一下結束)</span></div>
+          <div className="panelBody stepCanvas">
             <OriginalImageCanvas
               bitmap={state.image.bitmap}
               width={state.image.width}
@@ -401,27 +484,25 @@ export default function App() {
               onPlotRoiCommit={onPlotRoiCommit}
             />
           </div>
-        </section>
-
-        <section className="panel">
-          <div className="panelTitle">ROI Image <span className="sub">(Axis ROIs → Auto Detect → Calib → Seeds)</span></div>
-
           <div className="btnRow">
-            <button className="btn" disabled={!hasPlotRoi || interactionMode !== "axis"} onClick={() => setAxisMode("x")}>
-              Select X Axis ROI {axisMode === "x" && interactionMode === "axis" ? <span className="pill">active</span> : null}
-            </button>
-            <button className="btn" disabled={!hasPlotRoi || interactionMode !== "axis"} onClick={() => setAxisMode("y")}>
-              Select Y Axis ROI {axisMode === "y" && interactionMode === "axis" ? <span className="pill">active</span> : null}
-            </button>
-
-            <button className="btn" disabled={!canAutoDetect} onClick={onAutoDetect}>Auto Detect</button>
-            <button className="btn" disabled={!hasAutoDetect} onClick={() => setInteractionMode("calibration")}>Pick Calibration</button>
-            <button className="btn" disabled={!canPickSeeds} onClick={startPickSeeds}>Pick Seeds</button>
-            <button className="btn" disabled={state.curve.seeds.length === 0} onClick={clearSeeds}>Clear Seeds</button>
-            <button className="btn" onClick={() => setInteractionMode("axis")}>Back to Axis ROI</button>
+            <button className="btn" onClick={() => goToStep(1)}>回到上一步</button>
+            <button className="btn" disabled={!hasPlotRoi} onClick={() => goToStep(3)}>下一步</button>
           </div>
+        </section>
+      )}
 
-          <div className="panelBody">
+      {step === 3 && (
+        <section className="panel">
+          <div className="panelTitle">Step 3 · 拉 Axis-ROI</div>
+          <div className="btnRow">
+            <button className="btn" disabled={!hasPlotRoi} onClick={() => setAxisMode("x")}>
+              選擇 X 軸 ROI {axisMode === "x" ? <span className="pill">active</span> : null}
+            </button>
+            <button className="btn" disabled={!hasPlotRoi} onClick={() => setAxisMode("y")}>
+              選擇 Y 軸 ROI {axisMode === "y" ? <span className="pill">active</span> : null}
+            </button>
+          </div>
+          <div className="panelBody stepCanvas">
             <RoiWorkCanvas
               roi={state.roiImageData}
               axisRoiX={state.axisRoiX}
@@ -429,132 +510,195 @@ export default function App() {
               axisMode={axisMode}
               onCommitAxisRoi={onCommitAxisRoi}
               autoDetect={state.autoDetect}
-              interactionMode={interactionMode}
+              interactionMode="axis"
               calibStage={calibStage}
               calibPoints={state.calibration}
               onClickRoiPoint={onClickRoiPoint}
               seedPoints={state.curve.seeds}
+              seedTarget={state.curve.seedTarget}
             />
           </div>
-        </section>
-      </div>
-
-      <div className="bottom">
-        <section className="panel bottomPanel">
-          <div className="panelTitle" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span>Data Preview Chart</span>
-            <button
-              className="btn"
-              disabled={!state.curve.points || state.curve.points.length === 0}
-              onClick={() => {
-                const pts = state.curve.points ?? [];
-                const csv = toCsv(pts);
-                const base = state.image.file?.name?.replace(/\.[^.]+$/, "") || "spectra_digitized";
-                downloadText(`${base}.csv`, csv, "text/csv;charset=utf-8");
-              }}
-            >
-              Download CSV
-            </button>
-          </div>
-
-          <div className="panelBody" style={{ padding: 0 }}>
-            <div style={{ height: "100%", minHeight: 220 }}>
-              <DataChartCanvas points={state.curve.points} />
-            </div>
+          <div className="btnRow">
+            <button className="btn" onClick={() => goToStep(2)}>回到上一步</button>
+            <button className="btn" disabled={!state.axisRoiX || !state.axisRoiY} onClick={() => goToStep(4)}>下一步</button>
           </div>
         </section>
+      )}
 
-        <section className="panel controlsPanel">
-          <div className="panelTitle">
-            Controls {calibrationReady ? <span className="pill">calibrated</span> : null}{" "}
-            {state.curve.points ? <span className="pill">traced</span> : null}
+      {step === 4 && (
+        <section className="panel">
+          <div className="panelTitle">Step 4 · Autodetect 與座標軸校正</div>
+          <div className="btnRow">
+            <button className="btn" disabled={!canAutoDetect} onClick={onAutoDetect}>Auto Detect</button>
+            <button className="btn" disabled={!hasAutoDetect} onClick={() => setInteractionMode("calibration")}>Pick Calibration</button>
+            <button className="btn" disabled={!hasAutoDetect} onClick={clearCalibrationPicks}>Clear Calib Picks</button>
           </div>
+          <div className="panelBody stepCanvas">
+            <RoiWorkCanvas
+              roi={state.roiImageData}
+              axisRoiX={state.axisRoiX}
+              axisRoiY={state.axisRoiY}
+              axisMode={axisMode}
+              onCommitAxisRoi={onCommitAxisRoi}
+              autoDetect={state.autoDetect}
+              interactionMode="calibration"
+              calibStage={calibStage}
+              calibPoints={state.calibration}
+              onClickRoiPoint={onClickRoiPoint}
+              seedPoints={state.curve.seeds}
+              seedTarget={state.curve.seedTarget}
+            />
+          </div>
+          <div className="panelBody stepColumns">
+            <section className="panel controlsPanel innerPanel">
+              <div className="panelTitle">Calibration</div>
+              <div className="panelBody">
+                <div className="field">
+                  <label>x1</label>
+                  <input type="number" value={state.calibration.x1 ?? ""} onChange={(e) => updateNumber("x1", e.target.value)} />
+                </div>
+                <div className="field">
+                  <label>x2</label>
+                  <input type="number" value={state.calibration.x2 ?? ""} onChange={(e) => updateNumber("x2", e.target.value)} />
+                </div>
+                <div className="field">
+                  <label>y1</label>
+                  <input type="number" value={state.calibration.y1 ?? ""} onChange={(e) => updateNumber("y1", e.target.value)} />
+                </div>
+                <div className="field">
+                  <label>y2</label>
+                  <input type="number" value={state.calibration.y2 ?? ""} onChange={(e) => updateNumber("y2", e.target.value)} />
+                </div>
+                <div className="field">
+                  <label style={{ width: 80 }}>Reverse X</label>
+                  <input type="checkbox" checked={state.calibration.reverseX} onChange={(e) => toggleReverseX(e.target.checked)} />
+                </div>
+                <div className="btnRow">
+                  <button className="btn" disabled={!canBuildCalibration} onClick={buildCalibration}>
+                    Build Calibration
+                  </button>
+                </div>
+              </div>
+            </section>
+          </div>
+          <div className="btnRow">
+            <button className="btn" onClick={() => goToStep(3)}>回到上一步</button>
+            <button className="btn" disabled={!calibrationReady} onClick={() => goToStep(5)}>下一步</button>
+          </div>
+        </section>
+      )}
 
-          <div className="panelBody" style={{ overflow: "auto" }}>
-            <div className="muted" style={{ padding: "10px 12px" }}>
-              Step 4: X1→X2→Y1→Y2 → Build Calibration<br />
-              Step 5: Pick 3 seeds (S1/S2/S3) → auto trace
-            </div>
-
-            <div className="field">
-              <label>x1</label>
-              <input type="number" value={state.calibration.x1 ?? ""} onChange={(e) => updateNumber("x1", e.target.value)} />
-            </div>
-            <div className="field">
-              <label>x2</label>
-              <input type="number" value={state.calibration.x2 ?? ""} onChange={(e) => updateNumber("x2", e.target.value)} />
-            </div>
-            <div className="field">
-              <label>y1</label>
-              <input type="number" value={state.calibration.y1 ?? ""} onChange={(e) => updateNumber("y1", e.target.value)} />
-            </div>
-            <div className="field">
-              <label>y2</label>
-              <input type="number" value={state.calibration.y2 ?? ""} onChange={(e) => updateNumber("y2", e.target.value)} />
-            </div>
-
-            <div className="field">
-              <label style={{ width: 80 }}>Reverse X</label>
-              <input type="checkbox" checked={state.calibration.reverseX} onChange={(e) => toggleReverseX(e.target.checked)} />
-              <span className="muted" style={{ opacity: 0.8 }}>sort later</span>
-            </div>
-
+      {step === 5 && (
+        <div className="stepSplit">
+          <section className="panel">
+            <div className="panelTitle">Step 5 · Pick seeds 與 Curve Extraction</div>
             <div className="btnRow">
-              <button className="btn" disabled={!canBuildCalibration} onClick={buildCalibration}>
-                Build Calibration
-              </button>
-              <button className="btn" disabled={!hasAutoDetect} onClick={clearCalibrationPicks}>
-                Clear Calib Picks
-              </button>
+              <button className="btn" disabled={!canPickSeeds} onClick={startPickSeeds}>開始選 Seeds</button>
+              <button className="btn" disabled={state.curve.seeds.length === 0} onClick={clearSeeds}>Clear Seeds</button>
             </div>
-
-            <div className="muted" style={{ padding: "8px 12px 0 12px" }}>Curve extraction (Step 5)</div>
-
-            <div className="field">
-              <label style={{ width: 80 }}>Threshold</label>
-              <input
-                type="range"
-                min={1}
-                max={200}
-                value={state.curve.threshold}
-                onChange={(e) => setThreshold(Number(e.target.value))}
-                disabled={!seedsReady}
-              />
-              <span className="pill">{state.curve.threshold}</span>
-            </div>
-
-            <div className="field">
-              <label style={{ width: 80 }}>Mode</label>
-              <select value={state.curve.mode} onChange={(e) => setMode(e.target.value as any)} disabled={!seedsReady}>
-                <option value="centerline">centerline</option>
-                <option value="median">median</option>
-              </select>
-            </div>
-
-            <div className="field">
-              <label style={{ width: 80 }}>MaxJump</label>
-              <input
-                type="number"
-                value={state.curve.maxJump}
-                onChange={(e) => setMaxJump(Number(e.target.value))}
-                disabled={!seedsReady}
+            <div className="panelBody stepCanvas">
+              <RoiWorkCanvas
+                roi={state.roiImageData}
+                axisRoiX={state.axisRoiX}
+                axisRoiY={state.axisRoiY}
+                axisMode={axisMode}
+                onCommitAxisRoi={onCommitAxisRoi}
+                autoDetect={state.autoDetect}
+                interactionMode="curve"
+                calibStage={calibStage}
+                calibPoints={state.calibration}
+                onClickRoiPoint={onClickRoiPoint}
+                seedPoints={state.curve.seeds}
+                seedTarget={state.curve.seedTarget}
               />
             </div>
-
             <div className="btnRow">
-              <button className="btn" disabled={!seedsReady || !state.curve.pickedColor} onClick={() => retraceNow()}>
-                Retrace
+              <button className="btn" onClick={() => goToStep(4)}>回到上一步</button>
+            </div>
+          </section>
+
+          <section className="panel controlsPanel">
+            <div className="panelTitle">
+              Controls {calibrationReady ? <span className="pill">calibrated</span> : null}{" "}
+              {state.curve.points ? <span className="pill">traced</span> : null}
+            </div>
+            <div className="panelBody" style={{ overflow: "auto" }}>
+              <div className="field">
+                <label style={{ width: 80 }}>Seeds</label>
+                <input
+                  type="number"
+                  min={3}
+                  max={1000}
+                  value={state.curve.seedTarget}
+                  onChange={(e) => setSeedTarget(Number(e.target.value))}
+                />
+                <span className="muted">3~1000</span>
+              </div>
+              <div className="field">
+                <label style={{ width: 80 }}>Threshold</label>
+                <input
+                  type="range"
+                  min={1}
+                  max={200}
+                  value={state.curve.threshold}
+                  onChange={(e) => setThreshold(Number(e.target.value))}
+                  disabled={!seedsReady}
+                />
+                <span className="pill">{state.curve.threshold}</span>
+              </div>
+              <div className="field">
+                <label style={{ width: 80 }}>Mode</label>
+                <select value={state.curve.mode} onChange={(e) => setMode(e.target.value as any)} disabled={!seedsReady}>
+                  <option value="centerline">centerline</option>
+                  <option value="median">median</option>
+                </select>
+              </div>
+              <div className="field">
+                <label style={{ width: 80 }}>MaxJump</label>
+                <input
+                  type="number"
+                  value={state.curve.maxJump}
+                  onChange={(e) => setMaxJump(Number(e.target.value))}
+                  disabled={!seedsReady}
+                />
+              </div>
+              <div className="btnRow">
+                <button className="btn" disabled={!seedsReady || !state.curve.pickedColor} onClick={() => retraceNow()}>
+                  Retrace
+                </button>
+              </div>
+              <div className="muted" style={{ padding: "0 12px 12px 12px" }}>
+                Seeds: {state.curve.seeds.length}/{state.curve.seedTarget} {seedsReady ? "✅" : "❌"}<br />
+                PickedColor: {state.curve.pickedColor ? `rgb(${state.curve.pickedColor.r},${state.curve.pickedColor.g},${state.curve.pickedColor.b})` : "—"}<br />
+                Points: {state.curve.points ? state.curve.points.length : 0}
+              </div>
+            </div>
+          </section>
+
+          <section className="panel bottomPanel">
+            <div className="panelTitle" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span>Data Preview Chart</span>
+              <button
+                className="btn"
+                disabled={!state.curve.points || state.curve.points.length === 0}
+                onClick={() => {
+                  const pts = state.curve.points ?? [];
+                  const csv = toCsv(pts);
+                  const base = state.image.file?.name?.replace(/\.[^.]+$/, "") || "spectra_digitized";
+                  downloadText(`${base}.csv`, csv, "text/csv;charset=utf-8");
+                }}
+              >
+                Download CSV
               </button>
             </div>
-
-            <div className="muted" style={{ padding: "0 12px 12px 12px" }}>
-              Seeds: {state.curve.seeds.length}/3 {seedsReady ? "✅" : "❌"}<br />
-              PickedColor: {state.curve.pickedColor ? `rgb(${state.curve.pickedColor.r},${state.curve.pickedColor.g},${state.curve.pickedColor.b})` : "—"}<br />
-              Points: {state.curve.points ? state.curve.points.length : 0}
+            <div className="panelBody" style={{ padding: 0 }}>
+              <div style={{ height: "100%", minHeight: 220 }}>
+                <DataChartCanvas points={state.curve.points} />
+              </div>
             </div>
-          </div>
-        </section>
-      </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

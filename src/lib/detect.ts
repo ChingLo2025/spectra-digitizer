@@ -59,6 +59,16 @@ function cluster1D(values: number[], gap = 3): number[] {
   return out;
 }
 
+function addUniquePoint(list: Point[], p: Point, epsilon = 2) {
+  const e2 = epsilon * epsilon;
+  for (const q of list) {
+    const dx = q.x - p.x;
+    const dy = q.y - p.y;
+    if (dx * dx + dy * dy <= e2) return;
+  }
+  list.push(p);
+}
+
 export function detectAxesAndTicksTwoRois(args: {
   roi: ImageData;
   axisRoiX: Rect;
@@ -170,6 +180,10 @@ export function detectAxesAndTicksTwoRois(args: {
     const clustered = cluster1D(yCandidates, 4);
     for (const cy of clustered) tickPointsY.push({ x: yAxisX, y: cy });
   }
+
+  const origin = { x: yAxisX, y: xAxisY };
+  addUniquePoint(tickPointsX, origin);
+  addUniquePoint(tickPointsY, origin);
 
   return { xAxisLine, yAxisLine, tickPointsX, tickPointsY };
 }
