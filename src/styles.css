@@ -42,12 +42,18 @@ body {
   flex: 1;
   min-height: 360px;
 }
+.main.single {
+  grid-template-columns: 1fr;
+}
 
 .bottom {
   display: grid;
   grid-template-columns: 1.6fr 1fr;
   gap: 12px;
   min-height: 280px;
+}
+.bottom.single {
+  grid-template-columns: 1fr;
 }
 
 .panel {
@@ -85,6 +91,53 @@ body {
   gap: 8px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--panelBorder);
+}
+
+.stepPanel .panelBody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.stepList {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.stepItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.16);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.stepItem.active {
+  color: var(--text);
+  border-color: rgba(0,255,180,0.6);
+  box-shadow: 0 0 0 1px rgba(0,255,180,0.25);
+}
+
+.stepItem.done {
+  color: var(--text);
+  border-color: rgba(255,255,255,0.2);
+}
+
+.stepIndex {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
 }
 
 .btn {

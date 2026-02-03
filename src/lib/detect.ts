@@ -110,6 +110,7 @@ export function detectAxesAndTicksTwoRois(args: {
 
   const band = 2;
   const minLen = 3;
+  const axisBand = 1;
 
   // x-axis ticks: vertical extension near xAxisY
   const xCandidates: number[] = [];
@@ -117,9 +118,17 @@ export function detectAxesAndTicksTwoRois(args: {
     const x0 = clamp(Math.floor(axisRoiX.x), 0, w - 1);
     const x1 = clamp(Math.floor(axisRoiX.x + axisRoiX.w), 0, w);
     for (let x = x0; x < x1; x++) {
-      // Must be dark on the axis
-      const idx0 = (xAxisY * w + x) * 4;
-      if (grayAt(data, idx0) >= thrX) continue;
+      // Allow a small vertical band when the axis line is faint.
+      let axisDark = false;
+      for (let yy = xAxisY - axisBand; yy <= xAxisY + axisBand; yy++) {
+        if (yy < 0 || yy >= h) continue;
+        const idx0 = (yy * w + x) * 4;
+        if (grayAt(data, idx0) < thrX) {
+          axisDark = true;
+          break;
+        }
+      }
+      if (!axisDark) continue;
 
       // Count vertical dark pixels above/below axis outside small band
       let up = 0;
@@ -148,8 +157,16 @@ export function detectAxesAndTicksTwoRois(args: {
     const y0 = clamp(Math.floor(axisRoiY.y), 0, h - 1);
     const y1 = clamp(Math.floor(axisRoiY.y + axisRoiY.h), 0, h);
     for (let y = y0; y < y1; y++) {
-      const idx0 = (y * w + yAxisX) * 4;
-      if (grayAt(data, idx0) >= thrY) continue;
+      let axisDark = false;
+      for (let xx = yAxisX - axisBand; xx <= yAxisX + axisBand; xx++) {
+        if (xx < 0 || xx >= w) continue;
+        const idx0 = (y * w + xx) * 4;
+        if (grayAt(data, idx0) < thrY) {
+          axisDark = true;
+          break;
+        }
+      }
+      if (!axisDark) continue;
 
       let left = 0;
       for (let x = yAxisX - band - 1; x >= 0; x--) {

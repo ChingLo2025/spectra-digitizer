@@ -123,7 +123,17 @@ export default function OriginalImageCanvas({ bitmap, width, height, plotRoi, on
     return { ix, iy, vp, cx, cy };
   }
 
-  function onDown(e: ReactMouseEvent<HTMLCanvasElement>) {
+  function onMove(e: ReactMouseEvent<HTMLCanvasElement>) {
+    if (!drag.dragging) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+    setDrag((d) => ({ ...d, x1: cx, y1: cy }));
+  }
+
+  function onClick(e: ReactMouseEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current;
     if (!canvas || !bitmap) return;
     const parent = canvas.parentElement;
@@ -136,34 +146,17 @@ export default function OriginalImageCanvas({ bitmap, width, height, plotRoi, on
     // only start drag if click inside image area
     if (t.ix < 0 || t.iy < 0 || t.ix > width || t.iy > height) return;
 
-    setDrag({ dragging: true, x0: t.cx, y0: t.cy, x1: t.cx, y1: t.cy });
-  }
-
-  function onMove(e: ReactMouseEvent<HTMLCanvasElement>) {
-    if (!drag.dragging) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const cx = e.clientX - rect.left;
-    const cy = e.clientY - rect.top;
-    setDrag((d) => ({ ...d, x1: cx, y1: cy }));
-  }
-
-  function onUp(_e: ReactMouseEvent<HTMLCanvasElement>) {
-    if (!drag.dragging) return;
-    const canvas = canvasRef.current;
-    if (!canvas || !bitmap) return;
-    const parent = canvas.parentElement;
-    if (!parent) return;
-    const cw = parent.clientWidth;
-    const ch = parent.clientHeight;
+    if (!drag.dragging) {
+      setDrag({ dragging: true, x0: t.cx, y0: t.cy, x1: t.cx, y1: t.cy });
+      return;
+    }
 
     const vp = getViewport(cw, ch, width, height);
 
-    const x0 = Math.min(drag.x0, drag.x1);
-    const y0 = Math.min(drag.y0, drag.y1);
-    const x1 = Math.max(drag.x0, drag.x1);
-    const y1 = Math.max(drag.y0, drag.y1);
+    const x0 = Math.min(drag.x0, t.cx);
+    const y0 = Math.min(drag.y0, t.cy);
+    const x1 = Math.max(drag.x0, t.cx);
+    const y1 = Math.max(drag.y0, t.cy);
 
     // Convert to image coords
     const ix0 = clamp((x0 - vp.ox) / vp.scale, 0, width);
@@ -181,10 +174,8 @@ export default function OriginalImageCanvas({ bitmap, width, height, plotRoi, on
     <canvas
       ref={canvasRef}
       className="canvas"
-      onMouseDown={onDown}
       onMouseMove={onMove}
-      onMouseUp={onUp}
-      onMouseLeave={onUp}
+      onClick={onClick}
     />
   );
 }
