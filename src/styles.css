@@ -129,3 +129,43 @@ body {
 }
 .muted { color: var(--muted); }
 .bottomPanel .panelBody { height: 100%; }
+
+.stepPanel .panelBody { display: flex; flex-direction: column; gap: 12px; }
+.stepper { display: flex; flex-wrap: wrap; gap: 8px; }
+.stepBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.05);
+  color: var(--text);
+  padding: 8px 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.stepBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+.stepBtn.active {
+  border-color: rgba(0,255,180,0.6);
+  background: rgba(0,255,180,0.12);
+}
+.stepIndex {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.12);
+  font-weight: 600;
+}
+.stepNav { display: flex; gap: 8px; justify-content: flex-end; }
+
+.stepSingle { min-height: 360px; }
+.stepGrid {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 12px;
+  min-height: 360px;
+}
+.stepStack { display: flex; flex-direction: column; gap: 12px; }
