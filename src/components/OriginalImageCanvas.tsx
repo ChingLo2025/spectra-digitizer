@@ -123,7 +123,7 @@ export default function OriginalImageCanvas({ bitmap, width, height, plotRoi, on
     return { ix, iy, vp, cx, cy };
   }
 
-  function onDown(e: ReactMouseEvent<HTMLCanvasElement>) {
+  function onClick(e: ReactMouseEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current;
     if (!canvas || !bitmap) return;
     const parent = canvas.parentElement;
@@ -133,10 +133,33 @@ export default function OriginalImageCanvas({ bitmap, width, height, plotRoi, on
     const t = canvasToImage(e, cw, ch);
     if (!t) return;
 
-    // only start drag if click inside image area
-    if (t.ix < 0 || t.iy < 0 || t.ix > width || t.iy > height) return;
+    if (!drag.dragging) {
+      // only start drag if click inside image area
+      if (t.ix < 0 || t.iy < 0 || t.ix > width || t.iy > height) return;
 
-    setDrag({ dragging: true, x0: t.cx, y0: t.cy, x1: t.cx, y1: t.cy });
+      setDrag({ dragging: true, x0: t.cx, y0: t.cy, x1: t.cx, y1: t.cy });
+      return;
+    }
+
+    const vp = getViewport(cw, ch, width, height);
+    const rect = canvas.getBoundingClientRect();
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+
+    const x0 = Math.min(drag.x0, cx);
+    const y0 = Math.min(drag.y0, cy);
+    const x1 = Math.max(drag.x0, cx);
+    const y1 = Math.max(drag.y0, cy);
+
+    const ix0 = clamp((x0 - vp.ox) / vp.scale, 0, width);
+    const iy0 = clamp((y0 - vp.oy) / vp.scale, 0, height);
+    const ix1 = clamp((x1 - vp.ox) / vp.scale, 0, width);
+    const iy1 = clamp((y1 - vp.oy) / vp.scale, 0, height);
+
+    const rectImg = { x: ix0, y: iy0, w: ix1 - ix0, h: iy1 - iy0 };
+    if (rectImg.w >= 2 && rectImg.h >= 2) onPlotRoiCommit(rectImg);
+
+    setDrag((d) => ({ ...d, dragging: false, x1: cx, y1: cy }));
   }
 
   function onMove(e: ReactMouseEvent<HTMLCanvasElement>) {
@@ -149,42 +172,12 @@ export default function OriginalImageCanvas({ bitmap, width, height, plotRoi, on
     setDrag((d) => ({ ...d, x1: cx, y1: cy }));
   }
 
-  function onUp(_e: ReactMouseEvent<HTMLCanvasElement>) {
-    if (!drag.dragging) return;
-    const canvas = canvasRef.current;
-    if (!canvas || !bitmap) return;
-    const parent = canvas.parentElement;
-    if (!parent) return;
-    const cw = parent.clientWidth;
-    const ch = parent.clientHeight;
-
-    const vp = getViewport(cw, ch, width, height);
-
-    const x0 = Math.min(drag.x0, drag.x1);
-    const y0 = Math.min(drag.y0, drag.y1);
-    const x1 = Math.max(drag.x0, drag.x1);
-    const y1 = Math.max(drag.y0, drag.y1);
-
-    // Convert to image coords
-    const ix0 = clamp((x0 - vp.ox) / vp.scale, 0, width);
-    const iy0 = clamp((y0 - vp.oy) / vp.scale, 0, height);
-    const ix1 = clamp((x1 - vp.ox) / vp.scale, 0, width);
-    const iy1 = clamp((y1 - vp.oy) / vp.scale, 0, height);
-
-    const rectImg = { x: ix0, y: iy0, w: ix1 - ix0, h: iy1 - iy0 };
-    if (rectImg.w >= 2 && rectImg.h >= 2) onPlotRoiCommit(rectImg);
-
-    setDrag((d) => ({ ...d, dragging: false }));
-  }
-
   return (
     <canvas
       ref={canvasRef}
       className="canvas"
-      onMouseDown={onDown}
+      onClick={onClick}
       onMouseMove={onMove}
-      onMouseUp={onUp}
-      onMouseLeave={onUp}
     />
   );
 }

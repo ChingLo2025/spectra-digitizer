@@ -101,8 +101,49 @@ export function detectAxesAndTicksTwoRois(args: {
   for (let i = 1; i < yColSum.length; i++) if (yColSum[i] > yColSum[bestCol]) bestCol = i;
   const yAxisX = clamp(Math.floor(axisRoiY.x) + bestCol, 0, w - 1);
 
-  const xAxisLine = makeLineHorizontal(xAxisY);
-  const yAxisLine = makeLineVertical(yAxisX);
+  let xAxisYRefined = xAxisY;
+  let yAxisXRefined = yAxisX;
+
+  const overlapX0 = Math.max(axisRoiX.x, axisRoiY.x);
+  const overlapY0 = Math.max(axisRoiX.y, axisRoiY.y);
+  const overlapX1 = Math.min(axisRoiX.x + axisRoiX.w, axisRoiY.x + axisRoiY.w);
+  const overlapY1 = Math.min(axisRoiX.y + axisRoiX.h, axisRoiY.y + axisRoiY.h);
+
+  if (overlapX1 - overlapX0 >= 2 && overlapY1 - overlapY0 >= 2) {
+    const overlapRect: Rect = { x: overlapX0, y: overlapY0, w: overlapX1 - overlapX0, h: overlapY1 - overlapY0 };
+    const thrCross = (thrX + thrY) / 2;
+
+    const crossRowSum = new Array(Math.floor(overlapRect.h)).fill(0);
+    for (let yy = 0; yy < Math.floor(overlapRect.h); yy++) {
+      const y = clamp(Math.floor(overlapRect.y) + yy, 0, h - 1);
+      let sum = 0;
+      for (let x = clamp(Math.floor(overlapRect.x), 0, w - 1); x < clamp(Math.floor(overlapRect.x + overlapRect.w), 0, w); x++) {
+        const idx = (y * w + x) * 4;
+        if (grayAt(data, idx) < thrCross) sum++;
+      }
+      crossRowSum[yy] = sum;
+    }
+    let bestCrossRow = 0;
+    for (let i = 1; i < crossRowSum.length; i++) if (crossRowSum[i] > crossRowSum[bestCrossRow]) bestCrossRow = i;
+    xAxisYRefined = clamp(Math.floor(overlapRect.y) + bestCrossRow, 0, h - 1);
+
+    const crossColSum = new Array(Math.floor(overlapRect.w)).fill(0);
+    for (let xx = 0; xx < Math.floor(overlapRect.w); xx++) {
+      const x = clamp(Math.floor(overlapRect.x) + xx, 0, w - 1);
+      let sum = 0;
+      for (let y = clamp(Math.floor(overlapRect.y), 0, h - 1); y < clamp(Math.floor(overlapRect.y + overlapRect.h), 0, h); y++) {
+        const idx = (y * w + x) * 4;
+        if (grayAt(data, idx) < thrCross) sum++;
+      }
+      crossColSum[xx] = sum;
+    }
+    let bestCrossCol = 0;
+    for (let i = 1; i < crossColSum.length; i++) if (crossColSum[i] > crossColSum[bestCrossCol]) bestCrossCol = i;
+    yAxisXRefined = clamp(Math.floor(overlapRect.x) + bestCrossCol, 0, w - 1);
+  }
+
+  const xAxisLine = makeLineHorizontal(xAxisYRefined);
+  const yAxisLine = makeLineVertical(yAxisXRefined);
 
   // --- Tick detection (very lightweight)
   const tickPointsX: Point[] = [];
