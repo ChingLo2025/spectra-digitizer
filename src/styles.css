@@ -71,6 +71,61 @@ body {
 .sub { font-weight: 400; color: var(--muted); font-size: 12px; }
 .panelBody { padding: 10px; flex: 1; min-height: 0; }
 
+.stepper {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.stepBtn {
+  appearance: none;
+  border: 1px solid var(--panelBorder);
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  cursor: pointer;
+}
+.stepBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+.stepBtn.active {
+  border-color: rgba(0,255,180,0.45);
+  box-shadow: 0 0 0 1px rgba(0,255,180,0.25) inset;
+}
+.stepIndex {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.18);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.stepCanvas {
+  min-height: 360px;
+}
+
+.stepSplit {
+  display: grid;
+  grid-template-columns: minmax(360px, 1.3fr) minmax(260px, 0.8fr) minmax(320px, 1fr);
+  gap: 12px;
+  min-height: 360px;
+}
+
+.stepColumns {
+  padding: 0;
+}
+.innerPanel {
+  border: 1px solid var(--panelBorder);
+  background: rgba(255,255,255,0.03);
+}
+
 .canvas {
   width: 100%;
   height: 100%;
