@@ -43,6 +43,10 @@ body {
   min-height: 360px;
 }
 
+.main.single {
+  grid-template-columns: 1fr;
+}
+
 .bottom {
   display: grid;
   grid-template-columns: 1.6fr 1fr;
@@ -87,6 +91,35 @@ body {
   border-bottom: 1px solid var(--panelBorder);
 }
 
+.stepper {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+.step {
+  background: var(--panel);
+  border: 1px solid var(--panelBorder);
+  border-radius: 12px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.step.active {
+  color: var(--text);
+  border-color: rgba(255,255,255,0.25);
+  box-shadow: 0 0 0 1px rgba(0,255,180,0.25) inset;
+}
+
+.stepActions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--panelBorder);
+}
+
 .btn {
   appearance: none;
   border: 1px solid rgba(255,255,255,0.14);
@@ -109,14 +142,14 @@ body {
   border: 1px solid rgba(255,255,255,0.14);
 }
 
-.controlsPanel .field {
+.field {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 6px 12px;
 }
-.controlsPanel label { width: 34px; color: var(--muted); font-size: 13px; }
-.controlsPanel input[type="number"] {
+.field label { width: 34px; color: var(--muted); font-size: 13px; }
+.field input[type="number"] {
   width: 100%;
   padding: 7px 10px;
   border-radius: 10px;
@@ -129,3 +162,14 @@ body {
 }
 .muted { color: var(--muted); }
 .bottomPanel .panelBody { height: 100%; }
+
+.controlsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  padding: 0 12px 6px;
+}
+
+.subPanel {
+  margin: 0 12px 12px;
+}
